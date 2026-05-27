@@ -1,39 +1,62 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  Injectable,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { User } from './entities/user.entity';
+import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class UsersService {
-  private users: User[] = [];
-  private id = 1;
+  constructor(private prisma: PrismaService) {}
 
-  create(createUserDto: CreateUserDto) {
-    const user = { ...createUserDto, id: this.id++ };
-    this.users.push(user);
+  async create(createUserDto: CreateUserDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: createUserDto.email },
+    });
+    if (user) {
+      throw new BadRequestException('User already exists');
+    }
+    const newUser = await this.prisma.user.create({ data: createUserDto });
+
+    return newUser;
+  }
+
+  async findAll() {
+    return this.prisma.user.findMany();
+  }
+
+  async findOne(id: number) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
     return user;
   }
 
-  findAll() {
-    return this.users;
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const updatedUser = await this.prisma.user.update({
+      where: { id },
+      data: updateUserDto,
+    });
+
+    return updatedUser;
   }
 
-  findOne(id: number) {
-    return this.users.find((user) => user.id === id);
-  }
-
-  update(id: number, updateUserDto: UpdateUserDto) {
-    const user = this.findOne(id);
+  async remove(id: number) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
 
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundException('User not found');
     }
-    Object.assign(user, updateUserDto);
-    return user;
-  }
 
-  remove(id: number) {
-    this.users = this.users.filter((user) => user.id !== id);
+    await this.prisma.user.delete({ where: { id } });
+
     return { deleted: 'ok' };
   }
 }
